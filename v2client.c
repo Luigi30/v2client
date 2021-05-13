@@ -1,4 +1,36 @@
-#include "v2client.h"
+#define __NEW_STARLET 1
+
+#include <FAR_POINTERS.H>
+#include <stdio.h>
+#include <stdlib.h>
+#include <ssdef.h>
+#include <stsdef.h>
+#include <descrip.h>
+#include <GEN64DEF.H>
+#include <lib$routines.h>
+#include <STARLET.H>
+#include <iodef.h>
+#include <ints.h>
+#include <VADEF.H>
+#include <PSLDEF.H>
+#include <SECDEF.H>
+#include <VA_RANGEDEF.H>
+
+#include "glide/glide2x/cvg/glide/src/glide.h"
+#include "glide/glide2x/cvg/glide/src/fxglide.h"
+
+#include "errchk.h"
+
+// static int r0_status;
+// static $DESCRIPTOR (voodoo2_dev, "FXA0:");
+// static $DESCRIPTOR (voodoo2_section_name, "voodoo2_global");
+// unsigned short int channel;
+// static uint64 buf;
+
+// VOID_PQ mapped_addr_base;
+// static uint64 mapped_addr_length;
+
+// static uint32 data_to_read;
 
 #define MMIO8(addr)		(*(volatile uint8 *)(addr))
 #define MMIO16(addr)	(*(volatile uint16 *)(addr))
@@ -6,83 +38,11 @@
 #define MMIO64(addr)	(*(volatile uint64 *)(addr))
 
 // Make sure Glide is either enabled or disabled in the synchronizer settings as needed.
-void V2$ReadConfig(uint32 offset, uint32 *data)
-{
-    // This always returns a longword.
-    sys$qiow(   
-        0,
-        channel,            // FXA0:
-        IO$_READPBLK,       // command
-        NULL,
-        0,
-        0,
-        (void *)data,       // ptr to data
-        offset,             // region to read from
-        4,                  // longword
-        TRUE,               // config space
-        0,
-        0
-    );
-}
-
 int main()
 {
     printf("OpenVMS Voodoo2 client program 0.01\n");
 
-    printf("V2CLIENT: Attempting to open FXA0:\n");
-    r0_status = sys$assign(&voodoo2_dev, &channel, 0, 0, 0);
-
-    errchk_sig (r0_status);
-
-    (void)printf ("Channel assigned to %-.*s\n",
-                  voodoo2_dev.dsc$w_length,
-                  voodoo2_dev.dsc$a_pointer);
-
-    // Let's create a QIO request.
-    uint32 address_to_read = (1 << 10) | 0;
-
-    printf("V2CLIENT: Attempting to read one longword from FXA0: at %08X\n", address_to_read);
-
-    r0_status = sys$qiow(0,
-                         channel,
-                         IO$_ACCESS,
-                         NULL,
-                         0,
-                         0,
-                         (void *)&buf,
-                         0,
-                         8,
-                         0,
-                         0,
-                         0);
-    errchk_sig (r0_status);
-
-    printf("V2CLIENT: SYS$QIOW returned %X\n", buf);
-    buf = buf | PCI_MEM_BASE;
-
-    GENERIC_64 region_num;
-    region_num.gen64$q_quadword = 0;
-
-    uint64 voodoo2_phys_base_page = 0x48000000 / 8192;
-
-    r0_status = sys$crmpsc_pfn_64(
-        &region_num,
-        buf/8192,                   // buf = the physical address of the PCI card
-        (1048576*16) / 8192,
-        PSL$C_USER,
-        SEC$M_EXPREG|SEC$M_WRT,
-        &mapped_addr_base,
-        &mapped_addr_length
-    );
-
-    printf("V2CLIENT: sys$crmpsc_pfn_64 status %d\n", r0_status);
-
-    if(r0_status == SS$_CREATED)
-    {
-        printf("Mapped Voodoo2 to %p length %08X\n", mapped_addr_base, mapped_addr_length);
-        printf("%08X\n", MMIO32((uint32)mapped_addr_base));
-    }
-
+    
     GrHwConfiguration hwconfig;
     grSstQueryBoards(&hwconfig);
     printf("grSstQueryBoards sees %d SSTs\n", hwconfig.num_sst);
@@ -102,7 +62,7 @@ int main()
         GR_RESOLUTION_640x480,
         GR_REFRESH_60Hz,
         GR_COLORFORMAT_ABGR,
-        GR_ORIGIN_LOWER_LEFT,
+        GR_ORIGIN_UPPER_LEFT,
         2,
         0
     ))
@@ -115,22 +75,27 @@ int main()
 
     float color = 255.0;
     
-    guColorCombineFunction(GR_COLORCOMBINE_ITRGB);
+    grColorCombine( GR_COMBINE_FUNCTION_LOCAL,
+                    GR_COMBINE_FACTOR_NONE,
+                    GR_COMBINE_LOCAL_ITERATED,
+                    GR_COMBINE_OTHER_NONE,
+                    FXFALSE );
+    
+    grConstantColorValue( 0xFFFFFF );
 
     GrVertex vtx1, vtx2, vtx3;
-    vtx1.x = 160; vtx1.y = 120;
+    vtx1.x = 320; vtx1.y = 40;
     vtx1.r = color; vtx1.g = 0; vtx1.b = 0; vtx1.a = 0;
-    vtx2.x = 480; vtx2.y = 180;
+    vtx2.x = 100; vtx2.y = 440;
     vtx2.r = 0; vtx2.g = color; vtx2.b = 0; vtx2.a = 128;
-    vtx3.x = 320; vtx3.y = 360;
+    vtx3.x = 540; vtx3.y = 440;
     vtx3.r = 0; vtx3.g = 0; vtx3.b = color; vtx3.a = 255;
 
     grDrawTriangle(&vtx1, &vtx2, &vtx3);
 
     grBufferSwap(1);
 
-    printf("V2CLIENT: Releasing I/O channel\n");
-    r0_status = sys$dassgn (channel);
-    errchk_sig (r0_status);
+    char c = getchar();
 
+    grSstWinClose();
 }
