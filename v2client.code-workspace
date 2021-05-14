@@ -21,7 +21,10 @@
 			"gdebug.h": "c",
 			"gump.h": "c",
 			"sst1init.h": "c",
-			"stsdef.h": "c"
+			"stsdef.h": "c",
+			"3DFX.H": "cpp",
+			"CURSES.H": "cpp",
+			"vmsconio.h": "c"
 		},
 		"files.eol": "\n"
 	}

@@ -1,48 +1,45 @@
-#define __NEW_STARLET 1
-
-#include <FAR_POINTERS.H>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ssdef.h>
-#include <stsdef.h>
-#include <descrip.h>
-#include <GEN64DEF.H>
-#include <lib$routines.h>
-#include <STARLET.H>
-#include <iodef.h>
 #include <ints.h>
-#include <VADEF.H>
-#include <PSLDEF.H>
-#include <SECDEF.H>
-#include <VA_RANGEDEF.H>
+#include <glide.h>
+#include <SSDEF.H>
 
-#include "glide/glide2x/cvg/glide/src/glide.h"
-#include "glide/glide2x/cvg/glide/src/fxglide.h"
+#include <CURSES.H>
 
-#include "errchk.h"
+#include "vmsconio.h"
+#include "tlib.h"
 
-// static int r0_status;
-// static $DESCRIPTOR (voodoo2_dev, "FXA0:");
-// static $DESCRIPTOR (voodoo2_section_name, "voodoo2_global");
-// unsigned short int channel;
-// static uint64 buf;
+static const char name[]    = "test17";
+static const char purpose[] = "texturing example, decal, rgb lit, white lit, flat lit";
+static const char usage[]   = "-n <frames> -r <res> -d <filename>";
 
-// VOID_PQ mapped_addr_base;
-// static uint64 mapped_addr_length;
+typedef enum { DECAL, FLATLIT, RGBLIT, WHITELIT, SPECALPHA } TextureMode;
+const char *textureModeNames[] = {
+    "DECAL TEXTURE                   ",
+    "FLAT SHADING * TEXTURE          ",
+    "ITERATED RGB * TEXTURE          ", 
+    "INTENSITY LIGHTING * TEXTURE    ",
+    "(ITRGB * TEXTURE)+WHITE SPECULAR"
+};
 
-// static uint32 data_to_read;
+TlTexture texture;
 
-#define MMIO8(addr)		(*(volatile uint8 *)(addr))
-#define MMIO16(addr)	(*(volatile uint16 *)(addr))
-#define MMIO32(addr)	(*(volatile uint32 *)(addr))
-#define MMIO64(addr)	(*(volatile uint64 *)(addr))
-
-// Make sure Glide is either enabled or disabled in the synchronizer settings as needed.
 int main()
 {
+    char match; 
+    char **remArgs;
+    int  rv;
+
+    GrScreenResolution_t resolution = GR_RESOLUTION_640x480;
+    float                scrWidth   = 640.0f;
+    float                scrHeight  = 480.0f;
+    int frames                      = -1;
+    FxBool               scrgrab = FXFALSE;
+    char                 filename[256];
+    FxU8                 subframe = 0;
+
     printf("OpenVMS Voodoo2 client program 0.01\n");
 
-    
     GrHwConfiguration hwconfig;
     grSstQueryBoards(&hwconfig);
     printf("grSstQueryBoards sees %d SSTs\n", hwconfig.num_sst);
@@ -54,6 +51,8 @@ int main()
     }
 
     printf("performing grGlideInit\n");
+
+    tlSetScreen( scrWidth, scrHeight );
     grGlideInit();
     grSstSelect(0);
 
@@ -64,38 +63,200 @@ int main()
         GR_COLORFORMAT_ABGR,
         GR_ORIGIN_UPPER_LEFT,
         2,
-        0
+        1
     ))
     {
         printf("grSstWinOpen failed!\n");
     }
 
-    GrColor_t clearColor;
-    grBufferClear(0xFF400000, 0, GR_WDEPTHVALUE_FARTHEST);
+    printf("tlConSet\n");
 
-    float color = 255.0;
+    tlConSet( 0.0f, 0.0f, 1.0f, 0.5f, 
+              60, 15, 0xffffff );
+
+    /* Set up Render State - Decal Texture - color combine set in render loop */
+    grTexCombine( GR_TMU0,
+                  GR_COMBINE_FUNCTION_LOCAL,
+                  GR_COMBINE_FACTOR_NONE,
+                  GR_COMBINE_FUNCTION_NONE,
+                  GR_COMBINE_FACTOR_NONE,
+                  FXFALSE, FXFALSE );
+
+    printf("loading texture\n");
+
+    /* Load texture data into system ram */
+    assert( tlLoadTexture( "miro.3df", 
+                           &texture.info, 
+                           &texture.tableType, 
+                           &texture.tableData ) );
+    /* Download texture data to TMU */
+    grTexDownloadMipMap( GR_TMU0,
+                         grTexMinAddress( GR_TMU0 ),
+                         GR_MIPMAPLEVELMASK_BOTH,
+                         &texture.info );
+    if ( texture.tableType != NO_TABLE ) {
+        grTexDownloadTable( GR_TMU0,
+                            texture.tableType,
+                            &texture.tableData );
+    }
+
+    /* Select Texture As Source of all texturing operations */
+    grTexSource( GR_TMU0,
+                 grTexMinAddress( GR_TMU0 ),
+                 GR_MIPMAPLEVELMASK_BOTH,
+                 &texture.info );
+
+    /* Enable Bilinear Filtering + Mipmapping */
+    grTexFilterMode( GR_TMU0,
+                     GR_TEXTUREFILTER_BILINEAR,
+                     GR_TEXTUREFILTER_BILINEAR );
+    grTexMipMapMode( GR_TMU0,
+                     GR_MIPMAP_NEAREST,
+                     FXFALSE );
+
     
-    grColorCombine( GR_COMBINE_FUNCTION_LOCAL,
-                    GR_COMBINE_FACTOR_NONE,
-                    GR_COMBINE_LOCAL_ITERATED,
-                    GR_COMBINE_OTHER_NONE,
-                    FXFALSE );
+    printf("tlConOutput\n");
+
+    tlConOutput( "m - change lighting mode\n" );
+    tlConOutput( "Press any other key to quit\n\n" );
+    while( frames-- && tlOkToRender()) {
+        GrVertex vtxA, vtxB, vtxC, vtxD;
+        static TextureMode textureMode;
+
+        if (hwconfig.SSTs[0].type == GR_SSTTYPE_SST96) {
+          tlGetDimsByConst(resolution,
+                           &scrWidth, 
+                           &scrHeight );
+        
+          grClipWindow(0, 0, (FxU32) scrWidth, (FxU32) scrHeight);
+        }
+
+        grBufferClear( 0, 0, GR_ZDEPTHVALUE_FARTHEST );
+
+        tlConOutput( "Current Texture Mode: %s\r",
+                     textureModeNames[textureMode] );
+
+        switch( textureMode ) {
+        case DECAL:
+            grColorCombine( GR_COMBINE_FUNCTION_SCALE_OTHER,
+                            GR_COMBINE_FACTOR_ONE,
+                            GR_COMBINE_LOCAL_NONE,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            break;
+        case FLATLIT:
+            grColorCombine( GR_COMBINE_FUNCTION_SCALE_OTHER,
+                            GR_COMBINE_FACTOR_LOCAL,
+                            GR_COMBINE_LOCAL_CONSTANT,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            break;
+        case RGBLIT:
+            grColorCombine( GR_COMBINE_FUNCTION_SCALE_OTHER,
+                            GR_COMBINE_FACTOR_LOCAL,
+                            GR_COMBINE_LOCAL_ITERATED,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            break;
+        case WHITELIT:
+            grColorCombine( GR_COMBINE_FUNCTION_SCALE_OTHER,
+                            GR_COMBINE_FACTOR_LOCAL_ALPHA,
+                            GR_COMBINE_LOCAL_NONE,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            grAlphaCombine( GR_COMBINE_FUNCTION_LOCAL,
+                            GR_COMBINE_FACTOR_NONE,
+                            GR_COMBINE_LOCAL_ITERATED,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            break;
+        case SPECALPHA:
+            grColorCombine( GR_COMBINE_FUNCTION_SCALE_OTHER_ADD_LOCAL_ALPHA,
+                            GR_COMBINE_FACTOR_LOCAL,
+                            GR_COMBINE_LOCAL_ITERATED,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            grAlphaCombine( GR_COMBINE_FUNCTION_LOCAL,
+                            GR_COMBINE_FACTOR_NONE,
+                            GR_COMBINE_LOCAL_ITERATED,
+                            GR_COMBINE_OTHER_TEXTURE,
+                            FXFALSE );
+            break;
+        }
+        
+        /*---- 
+          A-B
+          |\|
+          C-D
+          -----*/
+        vtxA.oow = 1.0f;
+        vtxB = vtxC = vtxD = vtxA;
+
+        vtxA.x = vtxC.x = tlScaleX( 0.2f );
+        vtxB.x = vtxD.x = tlScaleX( 0.8f );
+        vtxA.y = vtxB.y = tlScaleY( 0.2f );
+        vtxC.y = vtxD.y = tlScaleY( 0.8f );
+
+        vtxA.tmuvtx[0].sow = vtxC.tmuvtx[0].sow = 0.0f;
+        vtxB.tmuvtx[0].sow = vtxD.tmuvtx[0].sow = 255.0f;
+        vtxA.tmuvtx[0].tow = vtxB.tmuvtx[0].tow = 0.0f;
+        vtxC.tmuvtx[0].tow = vtxD.tmuvtx[0].tow = 255.0f;
+
+        vtxA.r = 255.0f, vtxA.g =   0.0f, vtxA.b =   0.0f, vtxA.a = 255.0f;
+        vtxB.r =   0.0f, vtxB.g = 255.0f, vtxB.b =   0.0f, vtxB.a = 128.0f;
+        vtxC.r =   0.0f, vtxC.g =   0.0f, vtxC.b = 255.0f, vtxC.a = 128.0f;
+        vtxD.r =   0.0f, vtxD.g =   0.0f, vtxD.b =   0.0f, vtxD.a =   0.0f;
+
+        grDrawTriangle( &vtxA, &vtxD, &vtxC );
+        grDrawTriangle( &vtxA, &vtxB, &vtxD );
+
+        grConstantColorValue( 0x00ff0000 );
+
+        tlConRender();
+        grBufferSwap( 1 );
+
+        // Something is wrong here - grSstIdle never gets called after frame 6.
+        //grSstIdle();
+
+        /* grab the frame buffer */
+        if (scrgrab) {
+          char fname[256], tmp[32];
+          FxU16 cnt;
+
+          cnt = strcspn(filename, ".");
+          strncpy(fname, filename, cnt);
+          fname[cnt] = 0;
+          sprintf(tmp,"_%d", subframe);
+          strcat(fname, tmp);
+          strcat(fname, filename+cnt);
+          if (!tlScreenDump(fname, (FxU16)scrWidth, (FxU16)scrHeight))
+            printf( "Cannot open %s\n", filename);
+
+          /* cycle through all mode */
+          textureMode++;
+          if ( textureMode > SPECALPHA ) textureMode = DECAL;
+
+          subframe++;
+        }
+        
+        while( tlKbHit() ) {
+
+            char c = tlGetCH();
+
+            switch( c ) {
+            case 'm':
+            case 'M':
+                textureMode++;
+                if ( textureMode > SPECALPHA ) textureMode = DECAL;
+                break;
+            default:
+                frames = 0;
+                break;
+            }
+        }
+    }
     
-    grConstantColorValue( 0xFFFFFF );
-
-    GrVertex vtx1, vtx2, vtx3;
-    vtx1.x = 320; vtx1.y = 40;
-    vtx1.r = color; vtx1.g = 0; vtx1.b = 0; vtx1.a = 0;
-    vtx2.x = 100; vtx2.y = 440;
-    vtx2.r = 0; vtx2.g = color; vtx2.b = 0; vtx2.a = 128;
-    vtx3.x = 540; vtx3.y = 440;
-    vtx3.r = 0; vtx3.g = 0; vtx3.b = color; vtx3.a = 255;
-
-    grDrawTriangle(&vtx1, &vtx2, &vtx3);
-
-    grBufferSwap(1);
-
-    char c = getchar();
+    grGlideShutdown();
 
     grSstWinClose();
 }
