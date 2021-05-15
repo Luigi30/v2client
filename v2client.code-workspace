@@ -24,7 +24,11 @@
 			"stsdef.h": "c",
 			"3DFX.H": "cpp",
 			"CURSES.H": "cpp",
-			"vmsconio.h": "c"
+			"vmsconio.h": "c",
+			"iosfwd": "cpp",
+			"fstream": "cpp",
+			"system_error": "cpp",
+			"ios": "cpp"
 		},
 		"files.eol": "\n"
 	}
