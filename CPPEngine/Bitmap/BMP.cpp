@@ -1,9 +1,17 @@
 #include "BMP.h"
 
+#include <ASSERT.H>
+
 BMP::BMP(const char *path, GrLfbSrcFmt_t grFormat)
 {
 	fstream fileStream;
 	fileStream.open(path, ios::in|ios::binary);
+
+	if(fileStream.bad())
+	{
+		printf("BMP::BMP | Failed to load file: %s\n", path);
+		assert(false);
+	}
 
 	fileStream.read((char *)&bfHeader, sizeof(leBITMAPFILEHEADER));
 	fileStream.read((char *)&biHeader, sizeof(leBITMAPINFOHEADER));

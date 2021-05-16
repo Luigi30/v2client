@@ -5,7 +5,7 @@
 		}
 	],
 	"settings": {
-		"vmssoftware.project-dep.buildName": "RELEASE",
+		"vmssoftware.project-dep.buildName": "DEBUG",
 		"files.associations": {
 			"*.h65": "ca65",
 			"lib$routines.h": "c",
@@ -28,7 +28,17 @@
 			"iosfwd": "cpp",
 			"fstream": "cpp",
 			"system_error": "cpp",
-			"ios": "cpp"
+			"ios": "cpp",
+			"filesystem": "cpp",
+			"xlocale": "cpp",
+			"xlocinfo": "cpp",
+			"xstring": "cpp",
+			"string": "cpp",
+			"limits": "cpp",
+			"vector": "cpp",
+			"random": "cpp",
+			"cstdlib": "cpp",
+			"locimpl": "cpp"
 		},
 		"files.eol": "\n"
 	}

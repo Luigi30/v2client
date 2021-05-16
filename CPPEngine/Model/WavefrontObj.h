@@ -7,6 +7,9 @@
 #include <sstream>
 #include <map>
 #include <list>
+
+#pragma message disable REFTEMPORARY
+
 #include <boost/algorithm/string.hpp>
 
 #include "Types3D.h"

@@ -1,5 +1,7 @@
 #include "WavefrontObj.h"
 
+#include <ASSERT.H>
+
 #ifdef __GNUC__
 #include <libgen.h>
 #endif
@@ -26,7 +28,9 @@ WavefrontObj::WFObjLineToken WavefrontObj::GetLineToken(std::string line)
 	if(token == "MTLLIB")	return WF_MTLLIB;
 	if(token == "S")		return WF_S;
 
-	fputs("Encountered unknown .obj token!", stderr);
+	char buf[128];
+	sprintf(buf, "Encountered unknown .obj token: `%s`\n", token.c_str());
+	fputs(buf, stderr);
 	abort();
 	return WF_ERROR;
 }
@@ -48,7 +52,10 @@ WavefrontObj::WFMaterialLineToken WavefrontObj::GetMaterialToken(std::string lin
 	if(token == "ILLUM")	return WFM_ILLUM;
 	if(token == "#")		return WFM_COMMENT;
 	if(token == "MAP_KD")	return WFM_MAP_Kd;
-	fputs("Encountered unknown .mtl token!", stderr);
+	
+	char buf[128];
+	sprintf(buf, "Encountered unknown .mtl token: `%s`\n", token.c_str());
+	fputs(buf, stderr);
 	abort();
 	return WFM_ERROR;
 }
@@ -58,7 +65,12 @@ WavefrontObj::WavefrontObj(const char *path)
 {
 	// Working with .obj files so ASCII mode, not binary
 	fileStream.open(path, std::fstream::in);
-
+	
+	if(fileStream.bad())
+	{
+		printf("WavefrontObj::WavefrontObj | Failed to load file: %s\n", path);
+		assert(false);
+	}
 
 	/* Parse it into the std::map */
 	std::string line;
@@ -66,9 +78,11 @@ WavefrontObj::WavefrontObj(const char *path)
 	while(std::getline(fileStream, line))
 	{
 		// Ignore empty lines.
-		if(line == "") { continue; }
+		if(line == "" || (strlen(line.c_str()) == 0)) { continue; }
 		boost::to_upper(line);
 		WavefrontObj::WFObjLineToken token = GetLineToken(line);
+
+		printf("parsing line: `%s`\n", line.c_str());
 
 		switch(token)
 		{
@@ -155,12 +169,15 @@ void WavefrontObj::LoadMaterialLibrary(std::string basePath, std::string line)
 	while(std::getline(materialStream, material_line))
 	{
 		// Ignore empty lines.
-		if(material_line == "") { continue; }
+		boost::algorithm::trim(material_line);
+
+		if(material_line == "" || (strlen(material_line.c_str()) == 0)) { continue; }
 		boost::to_upper(material_line);
 		WavefrontObj::WFMaterialLineToken token = GetMaterialToken(material_line);
 
 		std::istringstream iss(material_line);
 		std::string value;
+		std::string s_f1, s_f2, s_f3;
 		float f1, f2, f3;
 		int illum;
 
@@ -179,40 +196,40 @@ void WavefrontObj::LoadMaterialLibrary(std::string basePath, std::string line)
 				material->name = value;
 				break;
 			case WFM_Ka:
-				iss >> value >> f1 >> f2 >> f3;
-				material->Ka = Vector3f(f1, f2, f3);
+				iss >> value >> s_f1 >> s_f2 >> s_f3;
+				material->Ka = Vector3f(atof(s_f1.c_str()), atof(s_f2.c_str()), atof(s_f3.c_str()));
 				break;
 			case WFM_Kd:
-				iss >> value >> f1 >> f2 >> f3;
-				material->Kd = Vector3f(f1, f2, f3);
+				iss >> value >> s_f1 >> s_f2 >> s_f3;
+				material->Kd = Vector3f(atof(s_f1.c_str()), atof(s_f2.c_str()), atof(s_f3.c_str()));
 				break;
 			case WFM_Ks:
-				iss >> value >> f1 >> f2 >> f3;
-				material->Ks = Vector3f(f1, f2, f3);
+				iss >> value >> s_f1 >> s_f2 >> s_f3;
+				material->Ks = Vector3f(atof(s_f1.c_str()), atof(s_f2.c_str()), atof(s_f3.c_str()));
 				break;
 			case WFM_Ke:
-				iss >> value >> f1 >> f2 >> f3;
-				material->Ke = Vector3f(f1, f2, f3);
+				iss >> value >> s_f1 >> s_f2 >> s_f3;
+				material->Ke = Vector3f(atof(s_f1.c_str()), atof(s_f2.c_str()), atof(s_f3.c_str()));
 				break;
 			case WFM_Ns:
-				iss >> value >> f1;
-				material->Ns = f1;
+				iss >> value >> s_f1;
+				material->Ns = atof(s_f1.c_str());
 				break;
 			case WFM_Ni:
 				iss >> value >> f1;
-				material->Ni = f1;
+				material->Ni = atof(s_f1.c_str());
 				break;
 			case WFM_D:
-				iss >> value >> f1;
-				material->D = f1;
+				iss >> value >> s_f1;
+				material->D = atof(s_f1.c_str());
 				break;
 			case WFM_MAP_Kd:
 				iss >> value >> value;
 				material->map_Kd = value;
 				break;
 			case WFM_ILLUM:
-				iss >> value >> illum;
-				material->illum = illum;
+				iss >> value >> s_f1;
+				material->illum = atoi(s_f1.c_str());
 				break;
 			default:
 				// ignore
@@ -233,7 +250,13 @@ GrVertex WavefrontObj::ParseLineVertex(std::string line)
 	std::string discard;
 
 	GrVertex v;
-	iss >> discard >> v.x >> v.y >> v.z;
+	std::string x, y, z;
+
+	iss >> discard >> x >> y >> z;
+	v.x = atof(x.c_str());
+	v.y = atof(y.c_str());
+	v.z = atof(z.c_str());
+
 	return v;
 }
 
@@ -250,7 +273,8 @@ void WavefrontObj::ParseLineFace(std::string line)
 
 	for(int i=0; i<3; i++)
 	{
-		boost::algorithm::split(splitStrings, faces[i], boost::algorithm::is_any_of("/"));
+		const std::string separator = "/";
+		boost::algorithm::split(splitStrings, faces[i], boost::algorithm::is_any_of(separator));
 		
 		geometry.pointIdx[i] = std::atoi(splitStrings[0].c_str());
 		texture.pointIdx[i] = std::atoi(splitStrings[1].c_str());

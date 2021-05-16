@@ -176,11 +176,31 @@ void SimulationCore::SetupSimulation()
 	simIsInitialized = true;
 }
 
+#ifdef __ALPHA
+#define CPU "DEC Alpha"
+#elif defined(__PPC__)
+#define CPU "PowerPC"
+#elif defined(__X86__)
+#define CPU "x86"
+#endif
+
+#ifdef __VMS
+#define OS "VMS V8.4"
+#elif defined(__OSX__)
+#define OS "Mac OS X"
+#elif defined(__WINDOWS__)
+#define OS "MS Windows"
+#endif
+
 void SimulationCore::ConsoleDebugInfo(Vector3f eye, Vector3f rot, Vector3f target)
 {
+	char buildinfo[128];
+	sprintf(buildinfo, "Built %s %s (%s %s)\n", __DATE__, __TIME__, CPU, OS);
+
 	// Debug readout.
 	tlConClear();
-	tlConOutput("Polysim II (3dfx)\n");
+	tlConOutput("Polysim II (Glide 2.56)\n");
+	tlConOutput(buildinfo);
 	tlConOutput("eye   : %f %f %f\n", eye.x, eye.y, eye.z);
 	tlConOutput("rot   : %f %f %f\n", rot.x, rot.y, rot.z);
 	tlConOutput("target: %f %f %f\n", target.x, target.y, target.z);
@@ -305,7 +325,7 @@ void SimulationCore::SimOneFrame()
 
 	g_HudManager.UpdateHud();
 	g_HudManager.DrawHud();
-	g_InputManager.DrawMouseCursor();
+	//g_InputManager.DrawMouseCursor();
 
 	this->ConsoleDebugInfo(camera->transformation.position, camera->transformation.rotation, camera->transformation.position + forward);
 

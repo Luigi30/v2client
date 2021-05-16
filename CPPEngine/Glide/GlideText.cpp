@@ -220,10 +220,10 @@ int tlConOutput( const char *fmt, ... ) {
         va_start( argptr, fmt );
         rv = vsprintf( buffer, fmt, argptr );
         va_end( argptr );
-
-        //boost::to_upper(buffer);
         
         c = buffer;
+
+        char converted_c;
 
         /* update console grid */
 
@@ -247,7 +247,14 @@ int tlConOutput( const char *fmt, ... ) {
                         consoleScroll();
                     }
                 }
-                consoleGrid[(consoleY*consoleColumns)+consoleX]=*c;
+
+                converted_c = *c;
+                if(converted_c > 0x60 && converted_c < 0x80)
+                {
+                    converted_c = converted_c & 0xDF;
+                }
+
+                consoleGrid[(consoleY*consoleColumns)+consoleX]=converted_c;
                 consoleX++;
                 break;
             }

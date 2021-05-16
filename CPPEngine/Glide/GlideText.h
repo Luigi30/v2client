@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <time.h>
 #include <math.h>
-//#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string.hpp>
 
 void tlConSet( float minX, float minY, 
                float maxX, float maxY,
