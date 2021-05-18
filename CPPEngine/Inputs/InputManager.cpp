@@ -11,6 +11,9 @@ InputManager::InputManager(void)
 	{
 		keyPressTable[i] = false;
 	}
+
+	mousePosition.x = 400;
+	mousePosition.y = 300;
 }
 
 InputManager::~InputManager(void)

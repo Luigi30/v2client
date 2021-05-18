@@ -55,7 +55,7 @@ bool GlideManager::StartGlide()
 {
 	grSstSelect(0);
 	printf("Selected Voodoo 0\n");
-	assert(grSstWinOpen(NULL, GR_RESOLUTION_800x600, GR_REFRESH_75Hz,
+	assert(grSstWinOpen(NULL, GR_RESOLUTION_800x600, GR_REFRESH_60Hz,
 						GR_COLORFORMAT_ARGB, GR_ORIGIN_LOWER_LEFT, 2, 1));
 	
 	isRunning = true;
